@@ -7,7 +7,7 @@ function Mvvm(options = {}) {
 
 
     // 数据劫持
-    observe(data);
+    var dep=observe(data);
 
 
     //数据代理
@@ -26,27 +26,37 @@ function Mvvm(options = {}) {
 
     //数据编译
     new Compile(options.el, this);
+
+    dep.notify()
 }
 
 // 创建Observe构造函数
 function Observe(data) {
+    let dep=new Dep();
+    // 所谓数据劫持就是给对象增加get,set
+    // 先遍历一遍对象再说
     for (let key in data) {
         let val = data[key];
         observe(val);//递归继续向下找，实现深度的数据劫持
         Object.defineProperty(data, key, {
-            configurable: true,
-            get() {
+            configurable: false,
+            enumerable: true,
+            get() {// 获取值的时候调用
+                Dep.target&&dep.addSub(Dep.target);//将Watcher添加到订阅事件中[watcher]
                 return val;
             },
-            set(newVal) {
+            set(newVal) {// 更改值的时候调用
                 if (val === newVal) {
                     return;
                 }
-                val = newVal;
-                observe(newVal);
+                val = newVal;// 如果以后再获取值(get)的时候，将刚才设置的值再返回去
+                observe(newVal);// 当设置为新值后，也需要把新值再去定义成属性
+                dep.notify();//让所有watcher的update方法执行即可
             }
         })
     }
+
+    return dep;
 }
 
 //外面写一个函数，不用每次都new，方便递归调用
@@ -70,25 +80,6 @@ function Compile(el, vm) {
     }
 
     //对el里面的内容进行替换
-    // function replace(frag) {
-    //     Array.from(frag.childNodes).forEach(node => {
-    //         let txt = node.textContent;
-    //         const reg = /\{\{\s*([^}]+\S)\s*\}\}/g;
-    //
-    //         if (node.nodeType === 3 && reg.test(txt)) {//既是文本节点又有双大括号
-    //             let arr = RegExp.$1.split('.');
-    //             let val = vm;
-    //             arr.forEach(key => {
-    //                 val = val[key];
-    //             })
-    //             node.textContent = txt.replace(reg, val).trim();
-    //         }
-    //         // 如果还有子节点，继续递归replace
-    //         if (node.childNodes && node.childNodes.length) {
-    //             replace(node)
-    //         }
-    //     })
-    // }
     function replace(frag) {
         Array.from(frag.childNodes).forEach(node => {
             let txt = node.textContent;
@@ -97,8 +88,8 @@ function Compile(el, vm) {
             if (node.nodeType === 3 && reg.test(txt)) { // 即是文本节点又有大括号的情况{{}}
                 function replaceTxt() {
                     node.textContent = txt.replace(reg, (matched, placeholder) => {
-                        console.log(placeholder);   // 匹配到的分组 如：song, album.name, singer...
-                        // vm.initMounted || new Watcher(vm, placeholder, replaceTxt);   // 监听变化，进行匹配替换内容
+                        //console.log(placeholder);   // 匹配到的分组 如：song, album.name, singer...
+                        /*vm.initMounted || */new Watcher(vm, placeholder, replaceTxt);   // 监听变化，进行匹配替换内容
                         return placeholder.split('.').reduce((val, key) => {
                             return val[key];
                         }, vm);
@@ -135,8 +126,49 @@ function Compile(el, vm) {
         });
     }
 
-    replace(fragment);
+    replace(fragment); // 替换内容
 
-    vm.$el.appendChild(fragment);
+    vm.$el.appendChild(fragment); // 再将文档碎片放入el中
+}
+
+//发布订阅模式 订阅和发布 如[fn1,fn2,fn3]
+function Dep() {
+    //一个数组（存放函数的事件池）
+    this.subs=[];
+}
+Dep.prototype={
+    addSub(sub){
+        this.subs.push(sub);
+    },
+    notify(){
+        //绑定的方法，都有一个update方法
+        this.subs.forEach(sub=>sub.update());
+    }
+}
+//监听函数
+//通过Watcher这个类创建的实例，都拥有update方法
+function Watcher(vm,exp,fn) {
+    this.fn=fn;
+    this.vm=vm;
+    this.exp=exp;
+    Dep.target=this;
+    let arr=exp.split('.');
+    let val=vm;
+    arr.forEach(key=>{//取值
+        val=val[key];//获取到this.a.b,默认就会调用get方法
+    })
+    Dep.target=null;
+}
+
+Watcher.prototype.update=function () {
+    console.log('update');
+    //notify的时候已经更改了
+    //再通过vm,exp来获取新的值
+    let arr=this.exp.split('.');
+    let val=this.vm;
+    arr.forEach(key=>{
+        val=val[key];//通过get获取到新的值
+    });
+    this.fn(val);//每次拿到新的值去替换{{}}的内容即可
 }
 
