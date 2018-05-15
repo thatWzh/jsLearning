@@ -11,8 +11,10 @@
     <p>主打歌为{{album.theme}}</p>
     <p>作词人为{{singer}}等人。</p>
     为你弹奏肖邦的{{album.theme}}
+    <p>求和的值是{{sum}}</p>
+    <input type="text" v-model="song">
 </div>
-<script src="js/mvvm.js"></script>
+<script src="mvvm-demo.js"></script>
 <script>
     // 写法和Vue一样
     let mvvm = new Mvvm({
@@ -23,7 +25,20 @@
                 name: '十一月的萧邦',
                 theme: '夜曲'
             },
-            singer: '周杰伦'
+            singer: '周杰伦',
+            a:1,
+            b:9
+        },
+        computed:{
+            sum(){
+                return this.a+this.b;
+            },
+            noop(){}
+        },
+        mounted(){
+            setTimeout(()=>{
+                console.log('所有事情都搞定了');
+            },1000);
         }
     });
 </script>

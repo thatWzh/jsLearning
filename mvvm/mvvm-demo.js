@@ -24,10 +24,38 @@ function Mvvm(options = {}) {
         })
     }
 
+    //初始化computed，将this指向实例
+    initComputed.call(this);
+
     //数据编译
     new Compile(options.el, this);
+    if (typeof options.mounted!='undefined'){
+        // 所有事情处理好后执行mounted钩子函数
+        options.mounted.call(this);//这就实现了mounted钩子函数
+    }
 
+    // console.log('mounted');
     dep.notify()
+    this.initMounted=true;
+}
+
+function initComputed() {
+    let vm=this;
+    let computed=this.$options.computed;//从options上拿到computed属性{sum:f,noop:f}
+    if (typeof computed!='undefined'){
+        // 得到的都是对象的key可以通过Object.keys转化为数组
+        Object.keys(computed).forEach(key=>{ // key就是sum,noop
+            Object.defineProperty(vm,key,{
+                // 这里判断computed里的key是对象还是函数
+                // 如果是函数直接就会调get方法
+                // 如果是对象的话，手动调一下get方法即可
+                // 如： sum() {return this.a + this.b;},他们获取a和b的值就会调用get方法
+                // 所以不需要new Watcher去监听变化了
+                get:typeof computed[key]==='function'?computed[key]:computed[key].get,
+                set(){}
+            })
+        })
+    }
 }
 
 // 创建Observe构造函数
@@ -89,7 +117,8 @@ function Compile(el, vm) {
                 function replaceTxt() {
                     node.textContent = txt.replace(reg, (matched, placeholder) => {
                         //console.log(placeholder);   // 匹配到的分组 如：song, album.name, singer...
-                        /*vm.initMounted || */new Watcher(vm, placeholder, replaceTxt);   // 监听变化，进行匹配替换内容
+                        // console.log(vm.initMounted);
+                        vm.initMounted || new Watcher(vm, placeholder, replaceTxt);   // 监听变化，进行匹配替换内容
                         return placeholder.split('.').reduce((val, key) => {
                             return val[key];
                         }, vm);
@@ -161,7 +190,7 @@ function Watcher(vm,exp,fn) {
 }
 
 Watcher.prototype.update=function () {
-    console.log('update');
+    // console.log('update');
     //notify的时候已经更改了
     //再通过vm,exp来获取新的值
     let arr=this.exp.split('.');
